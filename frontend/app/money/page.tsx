@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import AppLayout from '../../components/layout/AppLayout';
 import {
@@ -10,18 +10,17 @@ import {
   Target,
   FileText,
   Search,
-  Plus,
   ArrowDownLeft,
   ArrowUpRight,
-  TrendingUp,
   Download,
   Upload,
   RefreshCw,
   CreditCard,
   Repeat,
   CheckCircle2,
-  Calendar,
-  AlertCircle
+  Loader2,
+  AlertTriangle,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { expenseService } from '../../services/expense.service';
 import { incomeService } from '../../services/income.service';
@@ -31,6 +30,9 @@ import { goalService } from '../../services/goal.service';
 import { networthService } from '../../services/networth.service';
 import { debtService, Debt } from '../../services/debt.service';
 import { reportService } from '../../services/report.service';
+import { importService, ImportPreviewResponse, ImportCommitResponse } from '../../services/import.service';
+import { advancedService } from '../../services/advanced.service';
+import { ApiError } from '../../lib/api';
 import { Expense, Income, Budget, SavingsGoal } from '../../types';
 import { NetWorthSummaryResponse } from '../../services/networth.service';
 
@@ -50,6 +52,20 @@ function MoneyContent() {
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+
+  // Report download state
+  const [downloadingReport, setDownloadingReport] = useState<string | null>(null);
+  const [reportDownloadError, setReportDownloadError] = useState<string | null>(null);
+
+  // Bank Statement upload state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [statementFile, setStatementFile] = useState<File | null>(null);
+  const [statementPreview, setStatementPreview] = useState<ImportPreviewResponse | null>(null);
+  const [statementResult, setStatementResult] = useState<ImportCommitResponse | null>(null);
+  const [statementLoading, setStatementLoading] = useState(false);
+  const [statementImporting, setStatementImporting] = useState(false);
+  const [statementDragging, setStatementDragging] = useState(false);
+  const [statementError, setStatementError] = useState<string | null>(null);
 
   const setTab = (tab: string) => {
     router.push(`/money?tab=${tab}`);
@@ -85,6 +101,66 @@ function MoneyContent() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const resetStatementUpload = () => {
+    setStatementFile(null);
+    setStatementPreview(null);
+    setStatementResult(null);
+    setStatementError(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const processStatementFile = async (file: File | null) => {
+    setStatementError(null);
+    setStatementResult(null);
+    setStatementPreview(null);
+    if (!file) return;
+
+    setStatementFile(file);
+    setStatementLoading(true);
+    try {
+      const preview = await importService.preview(file);
+      setStatementPreview(preview);
+    } catch (err: any) {
+      setStatementError(err instanceof ApiError ? err.message : 'Failed to parse bank statement file.');
+      setStatementFile(null);
+    } finally {
+      setStatementLoading(false);
+    }
+  };
+
+  const commitStatementImport = async () => {
+    if (!statementFile || !statementPreview?.ready) return;
+    setStatementImporting(true);
+    setStatementError(null);
+    try {
+      const result = await importService.commit(statementFile);
+      setStatementResult(result);
+      await loadData();
+    } catch (err: any) {
+      setStatementError(err instanceof ApiError ? err.message : 'Import failed.');
+    } finally {
+      setStatementImporting(false);
+    }
+  };
+
+  const handleReportDownload = async (type: 'tax' | 'ledger' | 'expense') => {
+    setDownloadingReport(type);
+    setReportDownloadError(null);
+    try {
+      if (type === 'tax') {
+        await advancedService.downloadTaxPdf();
+      } else if (type === 'ledger') {
+        await reportService.downloadExcel();
+      } else if (type === 'expense') {
+        await reportService.downloadPdf();
+      }
+    } catch (err: any) {
+      setReportDownloadError(err instanceof ApiError ? err.message : 'Failed to download report.');
+    } finally {
+      setDownloadingReport(null);
+    }
+  };
 
   // Combined ledger transactions
   const combinedTransactions = [
@@ -125,7 +201,7 @@ function MoneyContent() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900 p-6 rounded-2xl border border-slate-700 shadow-sm">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-700 font-semibold border border-emerald-500/30">
+              <span className="text-xs px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 font-semibold border border-emerald-500/30">
                 MODULE 2
               </span>
               <h1 className="text-2xl font-bold text-slate-100 tracking-tight">Money &amp; Accounts Hub</h1>
@@ -301,20 +377,136 @@ function MoneyContent() {
             {/* Reconciliation & Excel Import Box */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
-                    <Upload className="w-5 h-5" />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
+                      <Upload className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-100">Bank Statement / Excel Import</h3>
+                      <p className="text-xs text-slate-400">Bulk import CSV / XLSX statements from Pakistani banks</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-base font-bold text-slate-100">Bank Statement / Excel Import</h3>
-                    <p className="text-xs text-slate-400">Bulk import CSV / XLSX statements from Pakistani banks</p>
+                  <button
+                    type="button"
+                    onClick={() => importService.downloadTemplate()}
+                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 font-medium rounded-lg flex items-center gap-1 border border-slate-700 transition-all"
+                    title="Download Sample Template"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" /> Template
+                  </button>
+                </div>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+                  className="hidden"
+                  onChange={(e) => void processStatementFile(e.target.files?.[0] || null)}
+                />
+
+                {statementError && (
+                  <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-xl flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>{statementError}</span>
                   </div>
-                </div>
-                <div className="border-2 border-dashed border-slate-700 hover:border-emerald-500 rounded-xl p-8 text-center transition-colors cursor-pointer bg-slate-950/40">
-                  <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                  <p className="text-sm font-semibold text-slate-200">Drag and drop bank statement (.xlsx / .csv)</p>
-                  <p className="text-xs text-slate-500 mt-1">Supports HBL, Meezan, Alfalah, Standard Chartered &amp; Nayapay</p>
-                </div>
+                )}
+
+                {!statementResult ? (
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setStatementDragging(true);
+                    }}
+                    onDragLeave={() => setStatementDragging(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setStatementDragging(false);
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) void processStatementFile(file);
+                    }}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${
+                      statementDragging
+                        ? 'border-emerald-400 bg-emerald-500/10'
+                        : 'border-slate-700 hover:border-emerald-500 bg-slate-950/40'
+                    }`}
+                  >
+                    {statementLoading ? (
+                      <div className="flex flex-col items-center py-2">
+                        <Loader2 className="w-8 h-8 text-emerald-400 animate-spin mb-2" />
+                        <p className="text-sm font-semibold text-slate-200">Parsing statement file…</p>
+                      </div>
+                    ) : statementPreview ? (
+                      <div className="space-y-3" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-center gap-2 text-emerald-400 font-semibold text-sm">
+                          <CheckCircle2 className="w-5 h-5" /> Ready: {statementFile?.name}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800 text-left">
+                            <span className="text-slate-400">Incomes:</span>{' '}
+                            <strong className="text-emerald-400 block">{statementPreview.incomeCount} rows (Rs. {statementPreview.incomeTotal.toLocaleString()})</strong>
+                          </div>
+                          <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800 text-left">
+                            <span className="text-slate-400">Expenses:</span>{' '}
+                            <strong className="text-amber-400 block">{statementPreview.expenseCount} rows (Rs. {statementPreview.expenseTotal.toLocaleString()})</strong>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 justify-center pt-1">
+                          <button
+                            type="button"
+                            disabled={statementImporting || !statementPreview.ready}
+                            onClick={() => void commitStatementImport()}
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-md"
+                          >
+                            {statementImporting ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Importing…
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-3.5 h-3.5" /> Import {statementPreview.incomeCount + statementPreview.expenseCount} Transactions
+                              </>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={resetStatementUpload}
+                            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                        <p className="text-sm font-semibold text-slate-200">
+                          Click or drag &amp; drop bank statement (.xlsx / .csv)
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Supports HBL, Meezan, Alfalah, Standard Chartered &amp; Nayapay statements
+                        </p>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs space-y-2">
+                    <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                      <CheckCircle2 className="w-4 h-4" /> Bank Statement Imported Successfully!
+                    </div>
+                    <p className="text-slate-300">
+                      Imported {statementResult.imported.incomeCount} incomes (Rs. {statementResult.imported.incomeTotal.toLocaleString()}) and {statementResult.imported.expenseCount} expenses (Rs. {statementResult.imported.expenseTotal.toLocaleString()}).
+                    </p>
+                    <button
+                      type="button"
+                      onClick={resetStatementUpload}
+                      className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-500 transition-colors"
+                    >
+                      Upload Another Statement
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4">
@@ -454,28 +646,50 @@ function MoneyContent() {
                 <p className="text-xs text-slate-400">
                   Generate verified accounting PDFs and raw CSV exports for Pakistani tax filings and audits.
                 </p>
+                {reportDownloadError && (
+                  <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-xl flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>{reportDownloadError}</span>
+                  </div>
+                )}
                 <div className="space-y-2.5">
                   {[
-                    { title: 'Annual Tax Summary (July 2025 – June 2026)', format: 'PDF / FBR Format' },
-                    { title: 'Complete Transaction Ledger Export', format: 'CSV / Excel' },
-                    { title: 'Monthly Expense Category Breakdown', format: 'PDF Report' },
-                  ].map((rep) => (
-                    <div
-                      key={rep.title}
-                      className="flex items-center justify-between p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs"
-                    >
-                      <div className="flex items-center gap-3">
-                        <FileText className="w-4 h-4 text-emerald-400" />
-                        <div>
-                          <p className="font-semibold text-slate-200">{rep.title}</p>
-                          <p className="text-slate-500">{rep.format}</p>
+                    { key: 'tax' as const, title: 'Annual Tax Summary (July 2025 – June 2026)', format: 'PDF / FBR Format' },
+                    { key: 'ledger' as const, title: 'Complete Transaction Ledger Export', format: 'CSV / Excel' },
+                    { key: 'expense' as const, title: 'Monthly Expense Category Breakdown', format: 'PDF Report' },
+                  ].map((rep) => {
+                    const isDownloading = downloadingReport === rep.key;
+                    return (
+                      <div
+                        key={rep.title}
+                        className="flex items-center justify-between p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs"
+                      >
+                        <div className="flex items-center gap-3">
+                          <FileText className="w-4 h-4 text-emerald-400" />
+                          <div>
+                            <p className="font-semibold text-slate-200">{rep.title}</p>
+                            <p className="text-slate-500">{rep.format}</p>
+                          </div>
                         </div>
+                        <button
+                          type="button"
+                          disabled={isDownloading}
+                          onClick={() => void handleReportDownload(rep.key)}
+                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 rounded-lg font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                        >
+                          {isDownloading ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Preparing…
+                            </>
+                          ) : (
+                            <>
+                              <Download className="w-3.5 h-3.5" /> Download
+                            </>
+                          )}
+                        </button>
                       </div>
-                      <button className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-semibold flex items-center gap-1.5 transition-all">
-                        <Download className="w-3.5 h-3.5" /> Download
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>

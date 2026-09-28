@@ -1,5 +1,7 @@
 # SmartFin AI — API and data notes
 
+The **full project report** (every module, UI page, ML algorithm, job, gap, and endpoint) is in the root [`README.md`](../README.md). This file is a short companion for local URLs and collections.
+
 This file describes **what the repo actually runs**, not a planned 16-collection design.
 
 ## Services

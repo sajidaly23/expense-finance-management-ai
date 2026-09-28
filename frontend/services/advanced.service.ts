@@ -1,4 +1,4 @@
-import { apiRequest } from '../lib/api';
+import { apiDownload, apiRequest } from '../lib/api';
 
 export type TaxEstimate = {
   taxYear: string;
@@ -64,6 +64,9 @@ export type LifePlanResult = {
 export const advancedService = {
   tax() {
     return apiRequest<{ status: string; estimate: TaxEstimate }>('/api/tax-planner');
+  },
+  downloadTaxPdf() {
+    return apiDownload('/api/tax-planner/export.pdf', 'smartfin-annual-tax-summary-2025-2026.pdf');
   },
   forecast() {
     return apiRequest<ForecastLabResult>('/api/forecast-lab', { method: 'POST' });
