@@ -1,0 +1,12 @@
+amount,description,category,subcategory,date,paymentMethod,transactionType,recurring
+75000,Monthly groceries,Food,Supermarket,2026-09-05,Credit Card,NEED,No
+22000,Office commute,Transport,Fuel,2026-09-08,Debit Card,NEED,No
+85000,Apartment rent,Rent,Flat rent,2026-09-01,Bank Transfer,NEED,Yes
+12000,Electricity bill,Bills,Utilities,2026-09-03,Mobile Wallet,NEED,No
+18000,New shoes,Shopping,Clothing,2026-09-12,Credit Card,WANT,No
+9000,Netflix and dining,Entertainment,Streaming,2026-09-14,Credit Card,WANT,No
+72000,Monthly groceries,Food,Supermarket,2026-08-03,Credit Card,NEED,No
+85000,Apartment rent,Rent,Flat rent,2026-08-01,Bank Transfer,NEED,Yes
+15000,Doctor visit,Healthcare,Checkup,2026-08-20,Cash,NEED,No
+70000,Monthly groceries,Food,Supermarket,2026-07-02,Credit Card,NEED,No
+85000,Apartment rent,Rent,Flat rent,2026-07-01,Bank Transfer,NEED,Yes
