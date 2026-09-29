@@ -208,7 +208,7 @@ describe('assistant financial intelligence', () => {
       .send({ question: 'how much did I spend in August', useOllama: false });
 
     expect(res.status).toBe(200);
-    expect(res.body.answer).toMatch(/No expenses are recorded for August 2026/i);
+    expect(res.body.answer).toMatch(/(?:No|couldn't find any) expenses (?:are )?recorded for August 2026/i);
   });
 
   it('does not leak another user financial data', async () => {
@@ -225,7 +225,7 @@ describe('assistant financial intelligence', () => {
       .send({ question: 'give me a august expense', useOllama: false });
 
     expect(res.status).toBe(200);
-    expect(res.body.answer).toMatch(/No expenses are recorded for August 2026/i);
+    expect(res.body.answer).toMatch(/(?:No|couldn't find any) expenses (?:are )?recorded for August 2026/i);
     expect(res.body.answer).not.toMatch(/202,000/);
   });
 

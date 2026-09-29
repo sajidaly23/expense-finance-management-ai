@@ -28,7 +28,7 @@ export type ReceiptScanResult = {
   confidence: number;
   warnings: string[];
   reviewRequired: boolean;
-  extractionSource: 'openai_vision';
+  extractionSource: 'openai_vision' | 'tesseract_ocr';
   categoryReason?: string;
   debug?: {
     ocrTextPreview?: string;

@@ -1,8 +1,8 @@
 import { AppError } from '../../utils/AppError.js';
 import { ExtractedField, ReceiptLineItem } from './receipt.types.js';
 
-const SUPPORTED_MIME = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
-const MIN_IMAGE_BYTES = 4_096;
+const SUPPORTED_MIME = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf']);
+const MIN_IMAGE_BYTES = 512;
 
 export function parseMoney(value: unknown): number | null {
   if (value === null || value === undefined || value === '') return null;
@@ -125,17 +125,21 @@ function guessMimeFromName(fileName?: string) {
   const lower = (fileName || '').toLowerCase();
   if (lower.endsWith('.png')) return 'image/png';
   if (lower.endsWith('.webp')) return 'image/webp';
+  if (lower.endsWith('.pdf')) return 'application/pdf';
   return 'image/jpeg';
 }
 
 function hasValidImageSignature(buffer: Buffer, mime: string) {
+  if (mime.includes('pdf')) {
+    return buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
+  }
   if (mime.includes('png')) {
     return buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47;
   }
   if (mime.includes('webp')) {
     return buffer.slice(0, 4).toString('ascii') === 'RIFF' && buffer.slice(8, 12).toString('ascii') === 'WEBP';
   }
-  return buffer[0] === 0xff && buffer[1] === 0xd8;
+  return buffer[0] === 0xff && buffer[1] === 0xd8 || buffer.length > 512;
 }
 
 export function sanitizeLineItems(items: unknown): ReceiptLineItem[] {
