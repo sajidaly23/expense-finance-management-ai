@@ -17,7 +17,7 @@ function resolveJwtSecret() {
 export const config = {
   port: parseInt(process.env.PORT || '5000', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
-  mongodbUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/smartfin_ai',
+  mongodbUri: process.env.MONGODB_URI || 'mongodb+srv://ansaralyh:ansaralyh123@hotela.ssd4egz.mongodb.net/finance-ai',
   mongodbUser: process.env.MONGODB_USER || '',
   mongodbPassword: process.env.MONGODB_PASSWORD || '',
   jwtSecret: resolveJwtSecret(),
